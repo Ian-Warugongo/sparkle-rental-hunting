@@ -6,11 +6,11 @@ import { initializeApp } from "firebase/app";
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: "sparkle-rentals.firebaseapp.com",
-  projectId: "sparkle-rentals",
-  storageBucket: "sparkle-rentals.firebasestorage.app",
-  messagingSenderId: "892646410398",
-  appId: "1:892646410398:web:b303908b1f15d00dd7138f"
+  authDomain: "sparkle-rentals-c4586.firebaseapp.com",
+  projectId: "sparkle-rentals-c4586",
+  storageBucket: "sparkle-rentals-c4586.firebasestorage.app",
+  messagingSenderId: "1016777208112",
+  appId: "1:1016777208112:web:330c5c5a50ec04e81f18f5"
 };
 
 // Initialize Firebase
