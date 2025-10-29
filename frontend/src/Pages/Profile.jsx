@@ -1,42 +1,77 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { deleteUserFailure, deleteUserStart, deleteUserSuccess, signOutUserStart, updateUserFailure, updateUserStart, updateUserSuccess } from '../redux/user/userSlice';
-import { useDispatch } from 'react-redux';
+import { useRef, useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import {
+  deleteUserFailure,
+  deleteUserStart,
+  deleteUserSuccess,
+  signOutUserStart,
+  updateUserFailure,
+  updateUserStart,
+  updateUserSuccess,
+} from '../redux/user/userSlice';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 
 const Profile = () => {
   const fileRef = useRef(null);
   const { currentUser, loading, error } = useSelector((state) => state.user);
+  const dispatch = useDispatch();
+
   const [file, setFile] = useState(undefined);
   const [filePerc, setFilePerc] = useState(0);
   const [fileUploadError, setFileUploadError] = useState(false);
   const [formData, setFormData] = useState({});
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [showUploadSuccess, setShowUploadSuccess] = useState(false);
+  const [showUploadComplete, setShowUploadComplete] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
-  const dispatch = useDispatch();
-  
+
+  // Handle auto file upload
   useEffect(() => {
     if (file) {
       handleFileUpload(file);
     }
   }, [file]);
 
+  // Auto-hide success messages
+  useEffect(() => {
+    if (updateSuccess) {
+      const timer = setTimeout(() => setUpdateSuccess(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [updateSuccess]);
+
+  useEffect(() => {
+    if (showUploadComplete) {
+      const timer = setTimeout(() => setShowUploadComplete(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showUploadComplete]);
+
   const handleFileUpload = async (file) => {
     const cloudName = import.meta.env.VITE_CLOUDNAME;
     const uploadPreset = import.meta.env.VITE_UPLOADPRESET;
+    const uniqueFileName = new Date().getTime() + file.name;
 
     const formDataUpload = new FormData();
     formDataUpload.append('file', file);
-    formDataUpload.append('upload_preset', 'ml_default');
-
+    formDataUpload.append('upload_preset', uploadPreset);
+    formDataUpload.append('public_id', uniqueFileName);
 
     try {
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: 'POST',
-        body: formDataUpload,
-      });
+      const res = await axios.post(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        formDataUpload,
+        {
+          onUploadProgress: (progressEvent) => {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / (progressEvent.total || 1)
+            );
+            setFilePerc(percent);
+          },
+        }
+      );
 
-      const data = await res.json();
+      const data = res.data;
 
       if (data.secure_url) {
         setFormData((prevFormData) => ({
@@ -44,8 +79,11 @@ const Profile = () => {
           avatar: data.secure_url,
         }));
         setFileUploadError(false);
-        setShowSuccessPopup(true);
-        setTimeout(() => setShowSuccessPopup(false), 3000);
+        setShowUploadSuccess(true);
+        setTimeout(() => setShowUploadSuccess(false), 3000);
+
+        setFilePerc(100);
+        setShowUploadComplete(true); // show "Upload complete!" for 3s
       } else {
         console.error('Upload failed:', data);
         setFileUploadError(true);
@@ -62,30 +100,30 @@ const Profile = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setUpdateSuccess(false);
+
     try {
       dispatch(updateUserStart());
       const res = await fetch(`/api/user/update/${currentUser._id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-
       });
+
       const data = await res.json();
       if (data.success === false) {
         dispatch(updateUserFailure(data.message));
         return;
       }
+
       dispatch(updateUserSuccess(data));
       setUpdateSuccess(true);
     } catch (error) {
       dispatch(updateUserFailure(error.message));
-
     }
   };
 
-  const handleDeleteUser= async () => {
+  const handleDeleteUser = async () => {
     try {
       dispatch(deleteUserStart());
       const res = await fetch(`/api/user/delete/${currentUser._id}`, {
@@ -101,6 +139,7 @@ const Profile = () => {
       dispatch(deleteUserFailure(error.message));
     }
   };
+
   const handleSignOut = async () => {
     try {
       dispatch(signOutUserStart());
@@ -112,63 +151,106 @@ const Profile = () => {
       }
       dispatch(deleteUserSuccess(data));
     } catch (error) {
-      dispatch(deleteUserFailure(data.message));
+      dispatch(deleteUserFailure(error.message));
     }
   };
 
   return (
     <div className='p-3 max-w-lg mx-auto'>
-      <h1 className='text-3xl font-semibold text-center my7'>Profile</h1>
+      <h1 className='text-3xl font-semibold text-center my-7'>Profile</h1>
+
       <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-        <input 
-          onChange={(e) => setFile(e.target.files[0])} 
-          type="file" 
-          ref={fileRef} 
-          hidden 
-          accept='image/*'  
+        <input
+          onChange={(e) => setFile(e.target.files[0])}
+          type='file'
+          ref={fileRef}
+          hidden
+          accept='image/*'
         />
-        <img 
-          onClick={() => fileRef.current.click()} 
-          src={formData.avatar || currentUser.avatar} 
-          alt="profile" 
-          className='rounded-full h-24 w-24 object-cover cursor-pointer self-center mt-2' 
+
+        <img
+          onClick={() => fileRef.current.click()}
+          src={formData.avatar || currentUser.avatar}
+          alt='profile'
+          className='rounded-full h-24 w-24 object-cover cursor-pointer self-center mt-2'
         />
-        {fileUploadError && <p className='text-red-500 text-sm text-center'>Image upload failed.</p>}
-        {showSuccessPopup && <p className='text-green-500 text-sm text-center'>Profile updated successfully.</p>}
-        <input 
-          type="text" 
-          placeholder='username' 
-          id='username' 
+
+        {/* Upload progress + messages */}
+        {filePerc > 0 && filePerc < 100 && (
+          <p className='text-blue-500 text-sm text-center'>
+            Uploading... {filePerc}%
+          </p>
+        )}
+        {showUploadComplete && (
+          <p className='text-green-500 text-sm text-center'>
+            Upload complete!
+          </p>
+        )}
+        {fileUploadError && (
+          <p className='text-red-500 text-sm text-center'>
+            Image upload failed.
+          </p>
+        )}
+        {showUploadSuccess && (
+          <p className='text-blue-500 text-sm text-center'>
+            Image uploaded successfully!
+          </p>
+        )}
+
+        {/* Inputs */}
+        <input
+          type='text'
+          placeholder='username'
+          id='username'
           defaultValue={currentUser.username}
           className='border p-3 rounded-lg'
-          onChange = {handleChange}
+          onChange={handleChange}
         />
-        <input 
-          type="email" 
-          placeholder='email' 
-          id='email' 
-          defaultValue={currentUser.email} 
+        <input
+          type='email'
+          placeholder='email'
+          id='email'
+          defaultValue={currentUser.email}
           className='border p-3 rounded-lg'
-          onChange = {handleChange} 
+          onChange={handleChange}
         />
-        <input 
-          type="password" 
-          placeholder='password' 
-          id='password' 
-          className='border p-3 rounded-lg' 
-          onChange = {handleChange}
+        <input
+          type='password'
+          placeholder='password'
+          id='password'
+          className='border p-3 rounded-lg'
+          onChange={handleChange}
         />
-        <button disabled={loading} className='bg-slate-700 text-white rounded-lg p-3 uppercase hover:opacity-95 disabled:opacity-80'>
+
+        {/* Submit button */}
+        <button
+          disabled={loading}
+          className='bg-slate-700 text-white rounded-lg p-3 uppercase hover:opacity-95 disabled:opacity-80'
+        >
           {loading ? 'Loading...' : 'Update'}
         </button>
-        <Link className='bg-green-700 text-white p-3 rounded-lg uppercase text-center hover: opacity-95' to={"/create-listing"}>Create Listing</Link>
+
+        <Link
+          className='bg-green-700 text-white p-3 rounded-lg uppercase text-center hover:opacity-95'
+          to={'/create-listing'}
+        >
+          Create Listing
+        </Link>
       </form>
+
       <div className='flex justify-between mt-5'>
-        <span onClick={handleDeleteUser} className='text-red-700 cursor-pointer'>Delete account</span>
-        <span onClick={handleSignOut} className='text-red-700 cursor-pointer'>Sign out</span>
+        <span onClick={handleDeleteUser} className='text-red-700 cursor-pointer'>
+          Delete account
+        </span>
+        <span onClick={handleSignOut} className='text-red-700 cursor-pointer'>
+          Sign out
+        </span>
       </div>
+
       <p className='text-red-700 mt-5'>{error ? error : ''}</p>
-      <p className='text-green-700 mt-5'>{updateSuccess ? 'User is updated successfully!' : ''}</p>
+      <p className='text-green-700 mt-5'>
+        {updateSuccess ? 'User details updated successfully!' : ''}
+      </p>
     </div>
   );
 };
