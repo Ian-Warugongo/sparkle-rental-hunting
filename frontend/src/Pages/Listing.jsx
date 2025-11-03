@@ -9,7 +9,6 @@ import {
   FaBath,
   FaBed,
   FaChair,
-  FaMapMarkedAlt,
   FaMapMarkerAlt,
   FaParking,
   FaShare,
@@ -60,7 +59,7 @@ export default function Listing() {
             {listing.imageUrls.map((url) => (
               <SwiperSlide key={url}>
                 <div
-                  className='h-[380px]'
+                  className='h-[550px]'
                   style={{
                     background: `url(${url}) center no-repeat`,
                     backgroundSize: 'cover',
